@@ -35,7 +35,7 @@ DEFAULT_CONFIG = {
 @register_platform_adapter("chatbox", "Chatbox (OpenAI API) 适配器", default_config_tmpl=DEFAULT_CONFIG)
 class ChatboxAdapter(Platform):
 
-    def __init__(self, platform_config: dict, platform_settings: dict, event_queue: asyncio.Queue) -> None:
+def __init__(self, platform_config: dict, platform_settings: dict, event_queue: asyncio.Queue) -> None:
         super().__init__(event_queue)
         self.config = platform_config
         self.settings = platform_settings
@@ -52,14 +52,15 @@ class ChatboxAdapter(Platform):
         self.spoof_nickname = self.config.get('spoof_nickname') 
         self.spoof_self_id = self.config.get('spoof_self_id') # <-- 修复
         
-        # <-- 修复: 获取此适配器在UI上的 "机器人名称(id)"
-        self.instance_id = self.settings.get('id', 'chatbox') 
-        # --- 结束 ---
+        # <-- 关键修复: 确保 self.instance_id 绝不是 None
+        # 使用 'or' 来处理 self.settings.get('id') 返回 None 的情况
+        self.instance_id = self.settings.get('id') or 'chatbox'
+        # --- 修复结束 ---
         
         self.pending_requests = {}
         self.runner: web.AppRunner | None = None
         self.site: web.TCPSite | None = None
-
+        
     def meta(self) -> PlatformMetadata:
         return PlatformMetadata("chatbox", "Chatbox (OpenAI API) 适配器")
 
