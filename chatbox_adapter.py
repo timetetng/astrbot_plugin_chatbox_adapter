@@ -28,7 +28,8 @@ DEFAULT_CONFIG = {
     "default_nickname": "Chatbox User", # Req 2: 默认昵称
     "spoof_platform": "", # Req 3: 要模拟的平台 (例如 aiocqhttp)
     "spoof_user_id": "", # Req 3: 要模拟的 QQ ID
-    "spoof_nickname": "" # Req 3: 模拟的昵称 (可选)
+    "spoof_nickname": "", # Req 3: 模拟的昵称 (可选)
+    "spoof_self_id": "" # Req 3 (修复): 您要模拟的适配器实例ID (例如 napcat)
 }
 
 @register_platform_adapter("chatbox", "Chatbox (OpenAI API) 适配器", default_config_tmpl=DEFAULT_CONFIG)
@@ -43,12 +44,16 @@ class ChatboxAdapter(Platform):
         self.port = self.config.get('port', 8080)
         self.host = self.config.get('host', '127.0.0.1')
         self.api_key = self.config.get('api_key')
-        self.timeout = self.config.get('timeout', 300) # Req 1
-        self.default_user_id = self.config.get('default_user_id', 'chatbox_api_user') # Req 2
-        self.default_nickname = self.config.get('default_nickname', 'Chatbox User') # Req 2
-        self.spoof_platform = self.config.get('spoof_platform') # Req 3
-        self.spoof_user_id = self.config.get('spoof_user_id') # Req 3
-        self.spoof_nickname = self.config.get('spoof_nickname') # Req 3
+        self.timeout = self.config.get('timeout', 300) 
+        self.default_user_id = self.config.get('default_user_id', 'chatbox_api_user') 
+        self.default_nickname = self.config.get('default_nickname', 'Chatbox User')
+        self.spoof_platform = self.config.get('spoof_platform') 
+        self.spoof_user_id = self.config.get('spoof_user_id') 
+        self.spoof_nickname = self.config.get('spoof_nickname') 
+        self.spoof_self_id = self.config.get('spoof_self_id') # <-- 修复
+        
+        # <-- 修复: 获取此适配器在UI上的 "机器人名称(id)"
+        self.instance_id = self.settings.get('id', 'chatbox') 
         # --- 结束 ---
         
         self.pending_requests = {}
@@ -69,9 +74,18 @@ class ChatboxAdapter(Platform):
         
         self.runner = web.AppRunner(app)
         await self.runner.setup()
-        self.site = web.TCPSite(self.runner, self.host, self.port)
         
-        logger.info(f"Chatbox (OpenAI API) 适配器正在监听 http://{self.host}:{self.port}")
+        # --- 修复 1: 强制 reuse_port ---
+        # 允许新实例在旧实例未完全释放端口时抢占端口
+        self.site = web.TCPSite(
+            self.runner, 
+            self.host, 
+            self.port, 
+            reuse_address=True, 
+            reuse_port=True # <-- 保留此项
+        )
+        
+        logger.info(f"Chatbox (OpenAI API) 适配器尝试在 http://{self.host}:{self.port} 上监听...")
         
         if not self.site:
              logger.error("Chatbox 适配器: site 未初始化")
@@ -79,28 +93,43 @@ class ChatboxAdapter(Platform):
             
         try:
             await self.site.start()
+            logger.info(f"Chatbox (OpenAI API) 适配器成功在 http://{self.host}:{self.port} 上监听。")
+
+            # 服务器成功启动后，保持运行
             while True:
                 await asyncio.sleep(3600)
+                
         except asyncio.CancelledError:
-            # 当任务被取消时 (例如终止时)，会抛出此异常
             logger.info("Chatbox 适配器 run 任务被取消...")
-            # --- 关键修复：移除 'raise' ---
-            # 通过不 re-raise 异常，我们强制 asyncio 等待 finally 块
-            # 中的 'await self.runner.cleanup()' 执行完毕
-            # 之后，此 run() 任务才算“干净”地结束
-            # 这样 PlatformManager 才能安全地启动新实例
-            # raise # <--- 移除这一行
-            # --- 修复结束 ---
+        except OSError as e:
+            # 增加对 [Errno 98] 的特定提示
+            if e.errno == 98:
+                 logger.error(f"端口 {self.port} 仍被占用。即使设置了 reuse_port，也无法绑定。")
+                 logger.error("这强烈表明有一个 *旧的* 适配器实例(没有此修复) 仍在运行。")
+                 logger.error("请从命令行 'kill' AstrBot 进程来清理僵尸进程，然后重试。")
+            else:
+                 logger.error(f"启动服务器时发生 OSError: {e}")
+        except Exception as e:
+            logger.error(f"Chatbox 适配器 run 循环中发生未知错误: {e}")
         finally:
-            # 无论任务是正常退出还是被取消，都执行清理
             logger.info(f"正在终止 Chatbox (OpenAI API) 适配器 http://{self.host}:{self.port} ...")
             if self.runner:
                 try:
-                    # 在这里清理 aiohttp 服务器，释放端口
-                    await self.runner.cleanup()
-                    logger.info(f"Chatbox (OpenAI API) 适配器已在 http://{self.host}:{self.port} 上停止")
+                    # --- 修复 2: 强制 cleanup 超时 ---
+                    # aiohttp.cleanup() 可能会因为活动连接而挂起。
+                    # 我们给它一个很短的超时 (例如 3 秒) 来尝试正常关闭。
+                    # 如果超时，它将引发 TimeoutError，我们捕获它并继续，
+                    # 允许 finally 块退出，以便任务可以死亡。
+                    logger.info("Chatbox 适配器: 正在尝试优雅关闭 (3秒超时)...")
+                    await asyncio.wait_for(self.runner.cleanup(), timeout=3.0)
+                    logger.info(f"Chatbox (OpenAI API) 适配器已在 http://{self.host}:{self.port} 上停止 (优雅)")
+                except asyncio.TimeoutError:
+                    logger.warning(f"Chatbox 适配器: cleanup() 在 {self.host}:{self.port} 上超时。强制终止。")
+                    # 超时后，我们不再等待，直接退出 finally
                 except Exception as e:
                     logger.error(f"Chatbox 适配器停止失败: {e}")
+            
+            logger.info(f"Chatbox 适配器: {self.host}:{self.port} 的 finally 块执行完毕。")
             self.runner = None
             self.site = None
 
@@ -118,7 +147,7 @@ class ChatboxAdapter(Platform):
             "object": "list",
             "data": [
                 {
-                    "id": "astrbot",
+                    "id": "astrbot-default",
                     "object": "model",
                     "created": int(time.time()),
                     "owned_by": "astrbot"
@@ -164,10 +193,10 @@ class ChatboxAdapter(Platform):
         response_queue = asyncio.Queue()
         self.pending_requests[abm.message_id] = response_queue
 
-        # --- 新增：实现身份模拟 (平台) ---
+        # --- 身份模拟 (平台) ---
         if self.spoof_platform:
             platform_meta = PlatformMetadata(self.spoof_platform, f"Spoofed {self.spoof_platform}")
-            logger.info(f"【Chatbox 适配器】: 身份模拟已激活。平台: {self.spoof_platform}, 用户ID: {abm.session_id}")
+            logger.info(f"【Chatbox 适配器】: 身份模拟已激活。平台: {self.spoof_platform}, BotID: {abm.self_id}, 用户ID: {abm.session_id}")
         else:
             platform_meta = self.meta()
         # --- 结束 ---
@@ -186,18 +215,26 @@ class ChatboxAdapter(Platform):
         self.commit_event(message_event)
         logger.info(f"【Chatbox 适配器】: 事件提交完毕。正在等待队列响应 (is_stream={is_stream})。")
 
-        # --- 关键修复：心跳 ---
+        # --- 心跳 ---
         if is_stream:
-            # 立即发送一个空块，以防止客户端（如 Chatbox）在 LLM 思考时超时
             try:
                 logger.info("【Chatbox 适配器】: 发送流式“心跳”块以保持连接。")
                 empty_chunk = self.format_as_openai_chunk({}, abm.message_id, model_name)
-                await response_queue.put(empty_chunk)
+                # 使用 asyncio.create_task 确保心跳发送不会阻塞后续处理
+                asyncio.create_task(self.safe_queue_put(response_queue, empty_chunk)) 
             except Exception as e:
                 logger.warning(f"【Chatbox 适配器】: 发送心跳块失败: {e}")
             return await self.handle_stream_response(request, abm.message_id, response_queue)
         else:
             return await self.handle_non_stream_response(abm.message_id, response_queue)
+
+    async def safe_queue_put(self, queue: asyncio.Queue, item: any):
+        """ 异步安全地向队列放入元素，忽略可能的队列关闭错误 """
+        try:
+            await queue.put(item)
+        except Exception as e:
+            logger.warning(f"向队列安全放入元素时出错 (可能已关闭): {e}")
+
 
     async def handle_non_stream_response(self, message_id: str, queue: asyncio.Queue):
         try:
@@ -228,6 +265,11 @@ class ChatboxAdapter(Platform):
                     await response.write(b'data: [DONE]\n\n')
                     break
                 
+                # 跳过可能是心跳的空块
+                if chunk.get("choices") and chunk["choices"][0].get("delta") == {}:
+                    logger.info("【Chatbox 适配器】: (Stream) 跳过空的心跳块。")
+                    continue
+                    
                 logger.info(f"【Chatbox 适配器】: (Stream) 收到数据块，正在发送: {chunk}")
                 chunk_json = json.dumps(chunk)
                 await response.write(f'data: {chunk_json}\n\n'.encode('utf-8'))
@@ -280,7 +322,7 @@ class ChatboxAdapter(Platform):
         
         abm.type = MessageType.FRIEND_MESSAGE 
         
-        # --- 新增：实现身份模拟 (用户) ---
+        # --- 身份模拟 (用户) ---
         user_id = self.spoof_user_id if self.spoof_user_id else body.get("user", self.default_user_id)
         nickname = self.spoof_nickname if self.spoof_nickname else self.default_nickname
         
@@ -288,15 +330,21 @@ class ChatboxAdapter(Platform):
         abm.sender = MessageMember(user_id=user_id, nickname=nickname) 
         # --- 结束 ---
         
+        # --- Bot ID (self_id) 逻辑 ---
+        if self.spoof_platform and self.spoof_self_id:
+            abm.self_id = self.spoof_self_id
+        else:
+            abm.self_id = self.instance_id
+        # --- 修复结束 ---
+        
         abm.message_id = f"chatcmpl-{uuid.uuid4()}"
         abm.message = chain
         abm.message_str = " ".join([p.text for p in chain if isinstance(p, Plain)])
         abm.raw_message = body
-        abm.self_id = "chatbox_bot"
 
         model_name = body.get("model", "astrbot-default-model")
         
-        logger.info(f"【Chatbox 适配器】: 转换消息成功 (类型: {abm.type}, UserID: {abm.session_id}): {abm.message_str}")
+        logger.info(f"【Chatbox 适配器】: 转换消息成功 (类型: {abm.type}, BotID: {abm.self_id}, UserID: {abm.session_id}): {abm.message_str}")
         return abm, model_name
 
     def format_as_openai_response(self, content: str, msg_id: str, model: str, finish_reason: str = "stop", tool_calls: list = None) -> dict:
@@ -339,7 +387,7 @@ class ChatboxAdapter(Platform):
             "choices": [
                 {
                     "index": 0,
-                    "delta": choice_delta if choice_delta else {},
+                    "delta": choice_delta if choice_delta else {}, # 确保 delta 至少是 {}
                     "logprobs": None,
                     "finish_reason": finish_reason
                 }
