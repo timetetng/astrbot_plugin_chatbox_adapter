@@ -133,19 +133,7 @@ class ChatboxAdapter(Platform):
             "object": "list",
             "data": [
                 {
-                    "id": "astrbot-default",
-                    "object": "model",
-                    "created": int(time.time()),
-                    "owned_by": "astrbot"
-                },
-                {
-                    "id": "gpt-4o-mini",
-                    "object": "model",
-                    "created": int(time.time()),
-                    "owned_by": "astrbot"
-                },
-                {
-                    "id": "gpt-4",
+                    "id": "Astrbot",
                     "object": "model",
                     "created": int(time.time()),
                     "owned_by": "astrbot"
