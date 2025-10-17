@@ -1,0 +1,5 @@
+name: astrbot_plugin_chatbox_adapter
+desc: 提供 OpenAI API 兼容接口的 Chatbox 适配器
+author: timetetng
+version: 1.0
+repo: https://github.com/timetetng/astrbot_plugin_chatbox_adapter

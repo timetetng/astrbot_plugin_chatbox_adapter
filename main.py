@@ -5,7 +5,6 @@ from astrbot.api.event import filter, AstrMessageEvent
 from astrbot.api.provider import LLMResponse
 from astrbot.api import logger
 
-# --- 顶层导入，处理重载错误 ---
 try:
     from .chatbox_adapter import ChatboxAdapter # noqa
 except ValueError as e:
@@ -29,27 +28,22 @@ except Exception as e:
     ChatboxEvent = AstrMessageEvent
 
 
-@register("astrbot_plugin_chatbox_adapter", "您的名字", "提供 OpenAI API 兼容接口的 Chatbox 适配器", "1.0", "https://github.com/...")
+@register("astrbot_plugin_chatbox_adapter", "timetetng", "提供 OpenAI API 兼容接口的 Chatbox 适配器", "1.0", "https://github.com/timetetng/astrbot_plugin_chatbox_adapter")
 class ChatboxPlugin(Star):
     
     def __init__(self, context: Context):
         super().__init__(context)
         logger.info("Chatbox 插件 (钩子) 加载成功。")
             
-    # (ping 指令保留用于测试)
     @filter.command("ping", priority=200) 
     async def handle_ping(self, event: AstrMessageEvent):
         if isinstance(event, ChatboxEvent):
-            logger.info("【Chatbox 插件】: 内置 /ping 指令被触发。")
             yield event.plain_result("pong (from chatbox adapter)")
 
-    # 钩子1: 拦截 LLM 的 tool_calls 响应 (这个仍然需要)
-    @filter.on_llm_response(priority=100) # 高优先级
+    @filter.on_llm_response(priority=100)
     async def intercept_tool_calls(self, event: AstrMessageEvent, resp: LLMResponse):
         if not isinstance(event, ChatboxEvent):
             return
-
-        logger.info(f"【Chatbox 钩子】: 'on_llm_response' 触发。 Role: {resp.role}")
 
         if resp.role == "tool" and resp.tools_call_name:
             adapter = event.client
@@ -58,13 +52,11 @@ class ChatboxPlugin(Star):
                 logger.warning("【Chatbox 钩子】: 'on_llm_response' 找不到队列")
                 return
 
-            logger.info(f"【Chatbox 钩子】: 拦截到 tool_calls: {resp.tools_call_name}")
-            event.stop_event() # 终止事件传播
+            event.stop_event()
             
             openai_tool_calls = self.convert_astrbot_tools_to_openai(resp)
 
             if event.is_stream:
-                logger.info("【Chatbox 钩子】: (Stream) 正在发送 tool_call 块和 [DONE]。")
                 chunk = adapter.format_as_openai_chunk(
                     {"tool_calls": openai_tool_calls},
                     event.message_obj.message_id,
@@ -77,9 +69,8 @@ class ChatboxPlugin(Star):
                     event.model_name
                 )
                 await queue.put(stop_chunk)
-                await queue.put("[DONE]") # 钩子独立发送 [DONE]
+                await queue.put("[DONE]")
             else:
-                logger.info("【Chatbox 钩子】: (Non-Stream) 正在发送 tool_call 聚合响应。")
                 response = adapter.format_as_openai_response(
                     None,
                     event.message_obj.message_id,
@@ -89,10 +80,6 @@ class ChatboxPlugin(Star):
                 )
                 await queue.put(response)
 
-    # --- 关键修复：移除了 finalize_response (after_message_sent) 钩子 ---
-    # 它被 yield/stop_event 阻止，不可靠。
-
-    # --- 辅助函数 ---
     
     def convert_astrbot_tools_to_openai(self, resp: LLMResponse) -> list:
         tool_calls = []
