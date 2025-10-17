@@ -15,7 +15,7 @@ from astrbot.api.message_components import Plain, Image
 from astrbot.core.platform.astr_message_event import MessageSesion
 from astrbot.api import logger
 
-# 导入自定义事件
+# 导入我们的自定义事件
 from .chatbox_event import ChatboxEvent
 
 DEFAULT_CONFIG = {
@@ -57,7 +57,11 @@ class ChatboxAdapter(Platform):
         self.site: web.TCPSite | None = None
 
     def meta(self) -> PlatformMetadata:
-        return PlatformMetadata("chatbox", "Chatbox (OpenAI API) 适配器", logo_path="icon.png")
+        return PlatformMetadata(
+            "chatbox", 
+            "Chatbox (OpenAI API) 适配器",
+            logo_path="icon.png"
+        )
 
     async def send_by_session(self, session: MessageSesion, message_chain: MessageChain):
         logger.warning("ChatboxAdapter 不支持主动消息 (send_by_session)")
@@ -130,7 +134,19 @@ class ChatboxAdapter(Platform):
             "object": "list",
             "data": [
                 {
-                    "id": "astrbot",
+                    "id": "astrbot-default",
+                    "object": "model",
+                    "created": int(time.time()),
+                    "owned_by": "astrbot"
+                },
+                {
+                    "id": "gpt-4o-mini",
+                    "object": "model",
+                    "created": int(time.time()),
+                    "owned_by": "astrbot"
+                },
+                {
+                    "id": "gpt-4",
                     "object": "model",
                     "created": int(time.time()),
                     "owned_by": "astrbot"
@@ -337,7 +353,7 @@ class ChatboxAdapter(Platform):
             "choices": [
                 {
                     "index": 0,
-                    "delta": choice_delta if choice_delta else {}, # 确保 delta 至少是 {}
+                    "delta": choice_delta if choice_delta else {},
                     "logprobs": None,
                     "finish_reason": finish_reason
                 }
