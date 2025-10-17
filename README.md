@@ -2,9 +2,9 @@
 
 [![GitHub](https://img.shields.io/badge/GitHub-timetetng/astrbot_plugin_chatbox_adapter-blue)](https://github.com/timetetng/astrbot_plugin_chatbox_adapter)
 
-这是一个为 [AstrBot](https://github.com/AstrTools/AstrBot) 提供的平台适配器插件。
+这是一个为 [AstrBot](https://docs.astrbot.app/) 提供的平台适配器插件。
 
-它的核心功能是在本地启动一个 Web 服务器，该服务器兼容 **OpenAI API** 标准。这使得您可以将 [Chatbox](https://chatbox.app/) 或任何其他支持 OpenAI API 格式的客户端（例如 ChatGPT-Next-Web, LobeChat, One-API 等）连接到 AstrBot。
+它的核心功能是在本地启动一个 Web 服务器，该服务器兼容 **OpenAI API** 标准。这使得您可以将 [Chatbox](https://chatboxai.app/) 或任何其他支持 OpenAI API 格式的客户端（例如 ChatGPT-Next-Web, LobeChat, One-API 等）连接到 AstrBot。
 
 简而言之，您可以**在 Chatbox 客户端里，与您的 AstrBot 机器人进行对话**，并使用 AstrBot 强大的 Agentic 能力和插件生态。
 
