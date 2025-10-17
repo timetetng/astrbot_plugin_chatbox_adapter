@@ -35,7 +35,7 @@ DEFAULT_CONFIG = {
 @register_platform_adapter("chatbox", "Chatbox (OpenAI API) 适配器", default_config_tmpl=DEFAULT_CONFIG)
 class ChatboxAdapter(Platform):
 
-def __init__(self, platform_config: dict, platform_settings: dict, event_queue: asyncio.Queue) -> None:
+    def __init__(self, platform_config: dict, platform_settings: dict, event_queue: asyncio.Queue) -> None:
         super().__init__(event_queue)
         self.config = platform_config
         self.settings = platform_settings
@@ -60,7 +60,7 @@ def __init__(self, platform_config: dict, platform_settings: dict, event_queue: 
         self.pending_requests = {}
         self.runner: web.AppRunner | None = None
         self.site: web.TCPSite | None = None
-        
+
     def meta(self) -> PlatformMetadata:
         return PlatformMetadata("chatbox", "Chatbox (OpenAI API) 适配器")
 
