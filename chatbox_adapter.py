@@ -28,7 +28,8 @@ DEFAULT_CONFIG = {
     "default_nickname": "Chatbox User", # Req 2: 默认昵称
     "spoof_platform": "", # Req 3: 要模拟的平台 (例如 aiocqhttp)
     "spoof_user_id": "", # Req 3: 要模拟的 QQ ID
-    "spoof_nickname": "" # Req 3: 模拟的昵称 (可选)
+    "spoof_nickname": "", # Req 3: 模拟的昵称 (可选)
+    "spoof_self_id": "" # Req 3 (修复): 您要模拟的适配器实例ID (例如 napcat)
 }
 
 @register_platform_adapter("chatbox", "Chatbox (OpenAI API) 适配器", default_config_tmpl=DEFAULT_CONFIG)
@@ -43,12 +44,16 @@ class ChatboxAdapter(Platform):
         self.port = self.config.get('port', 8080)
         self.host = self.config.get('host', '127.0.0.1')
         self.api_key = self.config.get('api_key')
-        self.timeout = self.config.get('timeout', 300) # Req 1
-        self.default_user_id = self.config.get('default_user_id', 'chatbox_api_user') # Req 2
-        self.default_nickname = self.config.get('default_nickname', 'Chatbox User') # Req 2
-        self.spoof_platform = self.config.get('spoof_platform') # Req 3
-        self.spoof_user_id = self.config.get('spoof_user_id') # Req 3
-        self.spoof_nickname = self.config.get('spoof_nickname') # Req 3
+        self.timeout = self.config.get('timeout', 300) 
+        self.default_user_id = self.config.get('default_user_id', 'chatbox_api_user') 
+        self.default_nickname = self.config.get('default_nickname', 'Chatbox User')
+        self.spoof_platform = self.config.get('spoof_platform') 
+        self.spoof_user_id = self.config.get('spoof_user_id') 
+        self.spoof_nickname = self.config.get('spoof_nickname') 
+        self.spoof_self_id = self.config.get('spoof_self_id') # <-- 修复
+        
+        # <-- 修复: 获取此适配器在UI上的 "机器人名称(id)"
+        self.instance_id = self.settings.get('id', 'chatbox') 
         # --- 结束 ---
         
         self.pending_requests = {}
@@ -56,6 +61,7 @@ class ChatboxAdapter(Platform):
         self.site: web.TCPSite | None = None
 
     def meta(self) -> PlatformMetadata:
+        # 这个 meta 只是一个基础元数据
         return PlatformMetadata("chatbox", "Chatbox (OpenAI API) 适配器")
 
     async def send_by_session(self, session: MessageSesion, message_chain: MessageChain):
@@ -82,21 +88,12 @@ class ChatboxAdapter(Platform):
             while True:
                 await asyncio.sleep(3600)
         except asyncio.CancelledError:
-            # 当任务被取消时 (例如终止时)，会抛出此异常
             logger.info("Chatbox 适配器 run 任务被取消...")
-            # --- 关键修复：移除 'raise' ---
-            # 通过不 re-raise 异常，我们强制 asyncio 等待 finally 块
-            # 中的 'await self.runner.cleanup()' 执行完毕
-            # 之后，此 run() 任务才算“干净”地结束
-            # 这样 PlatformManager 才能安全地启动新实例
-            # raise # <--- 移除这一行
-            # --- 修复结束 ---
+            # 移除 raise，等待 finally 执行完毕
         finally:
-            # 无论任务是正常退出还是被取消，都执行清理
             logger.info(f"正在终止 Chatbox (OpenAI API) 适配器 http://{self.host}:{self.port} ...")
             if self.runner:
                 try:
-                    # 在这里清理 aiohttp 服务器，释放端口
                     await self.runner.cleanup()
                     logger.info(f"Chatbox (OpenAI API) 适配器已在 http://{self.host}:{self.port} 上停止")
                 except Exception as e:
@@ -164,10 +161,10 @@ class ChatboxAdapter(Platform):
         response_queue = asyncio.Queue()
         self.pending_requests[abm.message_id] = response_queue
 
-        # --- 新增：实现身份模拟 (平台) ---
+        # --- 修复：身份模拟 (平台) ---
         if self.spoof_platform:
             platform_meta = PlatformMetadata(self.spoof_platform, f"Spoofed {self.spoof_platform}")
-            logger.info(f"【Chatbox 适配器】: 身份模拟已激活。平台: {self.spoof_platform}, 用户ID: {abm.session_id}")
+            logger.info(f"【Chatbox 适配器】: 身份模拟已激活。平台: {self.spoof_platform}, BotID: {abm.self_id}, 用户ID: {abm.session_id}")
         else:
             platform_meta = self.meta()
         # --- 结束 ---
@@ -175,7 +172,7 @@ class ChatboxAdapter(Platform):
         message_event = ChatboxEvent(
             message_str=abm.message_str,
             message_obj=abm,
-            platform_meta=platform_meta, 
+            platform_meta=platform_meta, # 使用可能被模拟的 meta
             session_id=abm.session_id,
             client=self,
             is_stream=is_stream,
@@ -186,9 +183,8 @@ class ChatboxAdapter(Platform):
         self.commit_event(message_event)
         logger.info(f"【Chatbox 适配器】: 事件提交完毕。正在等待队列响应 (is_stream={is_stream})。")
 
-        # --- 关键修复：心跳 ---
+        # --- 心跳 ---
         if is_stream:
-            # 立即发送一个空块，以防止客户端（如 Chatbox）在 LLM 思考时超时
             try:
                 logger.info("【Chatbox 适配器】: 发送流式“心跳”块以保持连接。")
                 empty_chunk = self.format_as_openai_chunk({}, abm.message_id, model_name)
@@ -280,7 +276,7 @@ class ChatboxAdapter(Platform):
         
         abm.type = MessageType.FRIEND_MESSAGE 
         
-        # --- 新增：实现身份模拟 (用户) ---
+        # --- 修复：实现身份模拟 (用户) ---
         user_id = self.spoof_user_id if self.spoof_user_id else body.get("user", self.default_user_id)
         nickname = self.spoof_nickname if self.spoof_nickname else self.default_nickname
         
@@ -288,15 +284,23 @@ class ChatboxAdapter(Platform):
         abm.sender = MessageMember(user_id=user_id, nickname=nickname) 
         # --- 结束 ---
         
+        # --- 修复：Bot ID (self_id) 逻辑 ---
+        if self.spoof_platform and self.spoof_self_id:
+            # 场景A: 完全模拟 (例如 "napcat")
+            abm.self_id = self.spoof_self_id
+        else:
+            # 场景B: 作为自己 (例如 "chatbox")
+            abm.self_id = self.instance_id
+        # --- 修复结束 ---
+        
         abm.message_id = f"chatcmpl-{uuid.uuid4()}"
         abm.message = chain
         abm.message_str = " ".join([p.text for p in chain if isinstance(p, Plain)])
         abm.raw_message = body
-        abm.self_id = "chatbox_bot"
 
         model_name = body.get("model", "astrbot-default-model")
         
-        logger.info(f"【Chatbox 适配器】: 转换消息成功 (类型: {abm.type}, UserID: {abm.session_id}): {abm.message_str}")
+        logger.info(f"【Chatbox 适配器】: 转换消息成功 (类型: {abm.type}, BotID: {abm.self_id}, UserID: {abm.session_id}): {abm.message_str}")
         return abm, model_name
 
     def format_as_openai_response(self, content: str, msg_id: str, model: str, finish_reason: str = "stop", tool_calls: list = None) -> dict:

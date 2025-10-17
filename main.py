@@ -36,7 +36,7 @@ class ChatboxPlugin(Star):
         super().__init__(context)
         logger.info("Chatbox 插件 (钩子) 加载成功。")
             
-    # (ping 指令保留用于测试)
+    # (ping 指令用于测试)
     @filter.command("ping", priority=200) 
     async def handle_ping(self, event: AstrMessageEvent):
         if isinstance(event, ChatboxEvent):
