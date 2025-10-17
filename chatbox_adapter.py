@@ -60,7 +60,6 @@ class ChatboxAdapter(Platform):
         return PlatformMetadata(
             "chatbox", 
             "Chatbox (OpenAI API) 适配器",
-            logo_path="icon.png"
         )
 
     async def send_by_session(self, session: MessageSesion, message_chain: MessageChain):
