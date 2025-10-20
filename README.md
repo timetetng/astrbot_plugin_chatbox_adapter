@@ -53,13 +53,16 @@ Chatbox AI 是一款 AI 客户端应用和智能助手，支持众多先进的 A
 
 1.  **安装插件**：
     * 将本项目克隆或下载到 AstrBot 的 `data/plugins` 目录下。
+
     ```bash
     git clone --depth 1 https://github.com/timetetng/astrbot_plugin_chatbox_adapter.git
     ```
+
 2.  **安装依赖**：
     * 本插件依赖 `aiohttp` 和 `minio` (v2.0 新增)。通常 AstrBot 会自动检测并提示安装。
     * 如果未自动安装，请在 AstrBot 的环境中手动运行：
     以 `uv` 为例，在插件目录下:
+    
     ```bash
     uv add aiohttp minio
     ```
