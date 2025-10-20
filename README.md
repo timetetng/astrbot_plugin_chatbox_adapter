@@ -6,9 +6,11 @@
 
 ## **注意！！！：从v1.0更新到v2.0必须要删除旧的消息平台，完全重启 Astrbot 后重新添加,否则可能会出现bug!**
 
-它的核心功能是在本地启动一个 Web 服务器，该服务器兼容 **OpenAI API** 标准。这使得您可以将 [Chatbox](https://chatboxai.app/) 或任何其他支持 OpenAI API 格式的客户端（例如 ChatGPT-Next-Web, LobeChat, One-API 等）连接到 AstrBot。
+它的核心功能是在本地启动一个 Web 服务器，该服务器兼容 **OpenAI API** 标准。这使得您可以将 [Chatbox](https://chatboxai.app/) 或任何其他支持 OpenAI API 格式的客户端（例如 ChatGPT-Next-Web, LobeChat, CherryStudio 等）连接到 AstrBot。
 
 简而言之，您可以**在 Chatbox 客户端里，与您的 AstrBot 机器人进行对话**，并使用 AstrBot 强大的 Agentic 能力和插件生态。
+
+这对像手机端 Chatbox 等不支持 MCP 和各种插件功能的 Agent 客户端非常有价值，本适配器支持伪造其他平台的user_id等身份，可以实现一些多端数据共享（如果你的插件支持识别user_id并以此共享数据的话）。
 
 <p align="center">
   <img src="./img/example2.jpg" alt="示例1" width="300" />
