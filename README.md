@@ -9,8 +9,8 @@
 简而言之，您可以**在 Chatbox 客户端里，与您的 AstrBot 机器人进行对话**，并使用 AstrBot 强大的 Agentic 能力和插件生态。
 
 <p align="center">
-  <img src="./img/example1.jpg" alt="示例1" width="300" />
-  &nbsp; &nbsp; <img src="./img/example2.jpg" alt="示例2" width="300" />
+  <img src="./img/example2.jpg" alt="示例1" width="300" />
+  &nbsp; &nbsp; <img src="./img/example1.jpg" alt="示例2" width="300" />
 </p>
 <p align="center">
   <em>(示例：左侧为多段消息聚合，右侧为 LLM 对话，均支持图片消息v2.0)</em>
