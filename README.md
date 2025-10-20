@@ -4,7 +4,7 @@
 
 这是一个为 [AstrBot](https://docs.astrbot.app/) 提供的平台适配器插件 (v2.0)。
 
-**注意！！！：从v1.0更新到v2.0必须要删除旧的消息平台，完全重启 Astrbot 后重新添加,否则可能会出现bug!**
+## **注意！！！：从v1.0更新到v2.0必须要删除旧的消息平台，完全重启 Astrbot 后重新添加,否则可能会出现bug!**
 
 它的核心功能是在本地启动一个 Web 服务器，该服务器兼容 **OpenAI API** 标准。这使得您可以将 [Chatbox](https://chatboxai.app/) 或任何其他支持 OpenAI API 格式的客户端（例如 ChatGPT-Next-Web, LobeChat, One-API 等）连接到 AstrBot。
 
