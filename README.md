@@ -2,7 +2,7 @@
 
 [![GitHub](https://img.shields.io/badge/GitHub-timetetng/astrbot_plugin_chatbox_adapter-blue)](https://github.com/timetetng/astrbot_plugin_chatbox_adapter)
 
-这是一个为 [AstrBot](https://docs.astrbot.app/) 提供的平台适配器插件 (v2.0)。
+这是一个为 [AstrBot](https://docs.astrbot.app/) 提供的平台适配器插件 (v2.0)
 
 ## **注意！！！：从v1.0更新到v2.0必须要删除旧的消息平台，完全重启 Astrbot 后重新添加,否则可能会出现bug!**
 
@@ -52,11 +52,23 @@ Chatbox AI 是一款 AI 客户端应用和智能助手，支持众多先进的 A
 ## 🚀 安装
 
 1.  **安装插件**：
-    * 通过 AstrBot 插件市场搜索 `astrbot_plugin_chatbox_adapter` 并安装。
-    * 或者，将本项目克隆或下载到 AstrBot 的 `plugins` 目录下。
+    * 将本项目克隆或下载到 AstrBot 的 `data/plugins` 目录下。
+    ```bash
+    git clone --depth 1 https://github.com/timetetng/astrbot_plugin_chatbox_adapter.git
+    ```
 2.  **安装依赖**：
     * 本插件依赖 `aiohttp` 和 `minio` (v2.0 新增)。通常 AstrBot 会自动检测并提示安装。
-    * 如果未自动安装，请在 AstrBot 的环境中手动运行：`pip install aiohttp minio`
+    * 如果未自动安装，请在 AstrBot 的环境中手动运行：
+    以 `uv` 为例，在插件目录下:
+    ```bash
+    uv add aiohttp minio
+    ```
+    或者在虚拟环境中使用 `pip` :
+
+    ```bash
+    pip install aiohttp minio
+    ```
+
 3.  **重启 AstrBot**。
 
 ## ⚙️ 配置
