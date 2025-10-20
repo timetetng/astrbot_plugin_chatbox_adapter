@@ -28,7 +28,7 @@ except Exception as e:
     ChatboxEvent = AstrMessageEvent
 
 
-@register("astrbot_plugin_chatbox_adapter", "timetetng", "提供 OpenAI API 兼容接口的 Chatbox 适配器", "1.0", "https://github.com/timetetng/astrbot_plugin_chatbox_adapter")
+@register("astrbot_plugin_chatbox_adapter", "timetetng", "提供 OpenAI API 兼容接口的 Chatbox 适配器，支持minio对象存储发送图片。", "2.0", "https://github.com/timetetng/astrbot_plugin_chatbox_adapter")
 class ChatboxPlugin(Star):
     
     def __init__(self, context: Context):

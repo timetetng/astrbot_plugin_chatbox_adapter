@@ -1,5 +1,5 @@
 name: astrbot_plugin_chatbox_adapter
-desc: 提供 OpenAI API 兼容接口的 Chatbox 适配器
+desc: 提供 OpenAI API 兼容接口的 Chatbox 适配器, 支持minio对象存储发送图片。
 author: timetetng
-version: 1.0
+version: 2.0
 repo: https://github.com/timetetng/astrbot_plugin_chatbox_adapter
