@@ -2,10 +2,6 @@ import asyncio
 import json
 import time
 import uuid
-import os
-import mimetypes
-import datetime
-from urllib.parse import quote
 
 try:
     from aiohttp import web
@@ -22,11 +18,18 @@ except ImportError:
     print("缺少 minio 依赖，如果启用 MinIO 功能，请在插件的 requirements.txt 中添加 minio")
 
 
-from astrbot.api.platform import Platform, AstrBotMessage, MessageMember, PlatformMetadata, MessageType, register_platform_adapter
-from astrbot.api.event import MessageChain
-from astrbot.api.message_components import Plain, Image
-from astrbot.core.platform.astr_message_event import MessageSesion
 from astrbot.api import logger
+from astrbot.api.event import MessageChain
+from astrbot.api.message_components import Image, Plain
+from astrbot.api.platform import (
+    AstrBotMessage,
+    MessageMember,
+    MessageType,
+    Platform,
+    PlatformMetadata,
+    register_platform_adapter,
+)
+from astrbot.core.platform.astr_message_event import MessageSesion
 
 # 导入我们的自定义事件
 from .chatbox_event import ChatboxEvent
@@ -43,7 +46,7 @@ DEFAULT_CONFIG = {
     "spoof_user_id": "",
     "spoof_nickname": "",
     "spoof_self_id": "",
-    
+
     # --- MinIO S3 兼容的对象存储配置 (可选) ---
     "minio_enable": False, # 默认关闭。设为 True 以启用本地图片上传
     "minio_endpoint": "127.0.0.1:9000", # MinIO 服务器地址
@@ -64,14 +67,14 @@ class ChatboxAdapter(Platform):
         super().__init__(event_queue)
         self.config = platform_config
         self.settings = platform_settings
-        
-        self.port = self.config.get('port', 8080)
-        self.host = self.config.get('host', '127.0.0.1')
-        self.api_key = self.config.get('api_key')
-        
+
+        self.port = self.config.get("port", 8080)
+        self.host = self.config.get("host", "127.0.0.1")
+        self.api_key = self.config.get("api_key")
+
         try:
-            self.timeout = float(self.config.get('timeout', 300)) # LLM总超时
-            self.aggregation_timeout = float(self.config.get('aggregation_timeout_seconds', 2)) # 消息聚合超时
+            self.timeout = float(self.config.get("timeout", 300)) # LLM总超时
+            self.aggregation_timeout = float(self.config.get("aggregation_timeout_seconds", 2)) # 消息聚合超时
         except (ValueError, TypeError):
             logger.error("【Chatbox 适配器】: 'timeout' 或 'aggregation_timeout_seconds' 配置值无效，必须是数字。")
             self.timeout = 300.0
@@ -82,29 +85,29 @@ class ChatboxAdapter(Platform):
             self.aggregation_timeout = 2.0
         # --- [修复结束] ---
 
-        self.default_user_id = self.config.get('default_user_id', 'chatbox_api_user')
-        self.default_nickname = self.config.get('default_nickname', 'Chatbox User')
-        self.spoof_platform = self.config.get('spoof_platform')
-        self.spoof_user_id = self.config.get('spoof_user_id')
-        self.spoof_nickname = self.config.get('spoof_nickname')
-        self.spoof_self_id = self.config.get('spoof_self_id')
-        
-        self.instance_id = self.settings.get('id') or 'chatbox'
-        
+        self.default_user_id = self.config.get("default_user_id", "chatbox_api_user")
+        self.default_nickname = self.config.get("default_nickname", "Chatbox User")
+        self.spoof_platform = self.config.get("spoof_platform")
+        self.spoof_user_id = self.config.get("spoof_user_id")
+        self.spoof_nickname = self.config.get("spoof_nickname")
+        self.spoof_self_id = self.config.get("spoof_self_id")
+
+        self.instance_id = self.settings.get("id") or "chatbox"
+
         self.pending_requests = {}
         self.runner: web.AppRunner | None = None
         self.site: web.TCPSite | None = None
 
         # --- MinIO Client ---
-        self.minio_client: "Minio | None" = None
-        self.minio_enable = self.config.get('minio_enable', False)
-        self.minio_endpoint = self.config.get('minio_endpoint', '127.0.0.1:9000')
-        self.minio_access_key = self.config.get('minio_access_key', 'minioadmin')
-        self.minio_secret_key = self.config.get('minio_secret_key', 'minio123456')
-        self.minio_bucket = self.config.get('minio_bucket', 'images')
-        self.minio_secure = self.config.get('minio_secure', False)
-        self.minio_use_presigned_url = self.config.get('minio_use_presigned_url', False)
-        self.minio_expires_hours = self.config.get('minio_expires_duration_hours', 24)
+        self.minio_client: Minio | None = None
+        self.minio_enable = self.config.get("minio_enable", False)
+        self.minio_endpoint = self.config.get("minio_endpoint", "127.0.0.1:9000")
+        self.minio_access_key = self.config.get("minio_access_key", "minioadmin")
+        self.minio_secret_key = self.config.get("minio_secret_key", "minio123456")
+        self.minio_bucket = self.config.get("minio_bucket", "images")
+        self.minio_secure = self.config.get("minio_secure", False)
+        self.minio_use_presigned_url = self.config.get("minio_use_presigned_url", False)
+        self.minio_expires_hours = self.config.get("minio_expires_duration_hours", 24)
 
         if self.minio_enable:
             if not MINIO_INSTALLED:
@@ -130,7 +133,7 @@ class ChatboxAdapter(Platform):
                             self.minio_client = None
                     else:
                         logger.info(f"【Chatbox 适配器】: 成功连接到 MinIO，存储桶 '{self.minio_bucket}' 已找到。")
-                
+
                 except S3Error as exc:
                     logger.error(f"【Chatbox 适配器】: 连接 MinIO 时出错: {exc}")
                     self.minio_client = None
@@ -139,7 +142,7 @@ class ChatboxAdapter(Platform):
                     self.minio_client = None
     def meta(self) -> PlatformMetadata:
         return PlatformMetadata(
-            "chatbox", 
+            "chatbox",
             "Chatbox (OpenAI API) 适配器",
         )
 
@@ -151,10 +154,10 @@ class ChatboxAdapter(Platform):
         app = web.Application()
         app.router.add_get("/v1/models", self.handle_list_models)
         app.router.add_post("/v1/chat/completions", self.handle_chat_completions)
-        
+
         self.runner = web.AppRunner(app)
         await self.runner.setup()
-        
+
         self.site = web.TCPSite(
             self.runner,
             self.host,
@@ -162,20 +165,20 @@ class ChatboxAdapter(Platform):
             reuse_address=True,
             reuse_port=True
         )
-        
+
         logger.info(f"Chatbox (OpenAI API) 适配器尝试在 http://{self.host}:{self.port} 上监听...")
-        
+
         if not self.site:
             logger.error("Chatbox 适配器: site 未初始化")
             return
-            
+
         try:
             await self.site.start()
             logger.info(f"Chatbox (OpenAI API) 适配器成功在 http://{self.host}:{self.port} 上监听。")
 
             while True:
                 await asyncio.sleep(3600)
-                
+
         except asyncio.CancelledError:
             logger.info("Chatbox 适配器 run 任务被取消...")
         except OSError as e:
@@ -197,7 +200,7 @@ class ChatboxAdapter(Platform):
                     logger.warning(f"Chatbox 适配器: cleanup() 在 {self.host}:{self.port} 上超时。强制终止。")
                 except Exception as e:
                     logger.error(f"Chatbox 适配器停止失败: {e}")
-            
+
             self.runner = None
             self.site = None
 
@@ -205,7 +208,7 @@ class ChatboxAdapter(Platform):
         auth_header = request.headers.get("Authorization")
         if not auth_header or not auth_header.startswith("Bearer "):
             return web.json_response({"error": "Missing Authorization header"}, status=401)
-        
+
         token = auth_header.split(" ")[1]
         if self.api_key and token != self.api_key:
             return web.json_response({"error": "Invalid API key"}, status=401)
@@ -227,7 +230,7 @@ class ChatboxAdapter(Platform):
         auth_header = request.headers.get("Authorization")
         if not auth_header or not auth_header.startswith("Bearer "):
             return web.json_response({"error": "Missing Authorization header"}, status=401)
-        
+
         token = auth_header.split(" ")[1]
         if self.api_key and token != self.api_key:
             return web.json_response({"error": "Invalid API key"}, status=401)
@@ -238,7 +241,7 @@ class ChatboxAdapter(Platform):
             return web.json_response({"error": "Invalid JSON body"}, status=400)
 
         is_stream = body.get("stream", False)
-        
+
         try:
             abm, model_name = await self.convert_openai_to_abm(body)
         except ValueError as e:
@@ -261,7 +264,7 @@ class ChatboxAdapter(Platform):
             is_stream=is_stream,
             model_name=model_name
         )
-        
+
         self.commit_event(message_event)
 
         if is_stream:
@@ -285,7 +288,7 @@ class ChatboxAdapter(Platform):
 
     async def handle_non_stream_response(self, message_id: str, queue: asyncio.Queue):
         final_response = None
-        
+
         # 嵌套函数，用于被 wait_for 包裹
         async def _responder():
             nonlocal final_response
@@ -308,13 +311,13 @@ class ChatboxAdapter(Platform):
                     item = await asyncio.wait_for(queue.get(), timeout=self.aggregation_timeout)
                     if isinstance(item, dict):
                         final_response = item # 持续覆盖，只保留最后一个聚合响应
-                            
+
             except asyncio.TimeoutError:
                 # --- 正常退出 (聚合超时) ---
                 # 内层的 aggregation_timeout 触发，意味着Bot停止发送消息。
                 logger.debug(f"【Chatbox 适配器】: (Non-Stream) 队列 {message_id} 聚合超时，准备发送回复。")
                 pass # 正常退出
-            
+
             except asyncio.CancelledError:
                 logger.debug(f"【Chatbox 适配器】: (Non-Stream) 队列 {message_id} 内部循环被取消。")
                 raise
@@ -351,13 +354,13 @@ class ChatboxAdapter(Platform):
     async def handle_stream_response(self, request: web.Request, message_id: str, queue: asyncio.Queue):
         response = web.StreamResponse(
             status=200,
-            reason='OK',
-            headers={'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache'}
+            reason="OK",
+            headers={"Content-Type": "text/event-stream", "Cache-Control": "no-cache"}
         )
         await response.prepare(request)
-        
+
         model_name = "astrbot-stream" # 默认模型名
-        
+
         # 嵌套函数，用于被 wait_for 包裹
         async def _responder():
             nonlocal model_name
@@ -368,43 +371,43 @@ class ChatboxAdapter(Platform):
                     chunk = await queue.get()
                     if chunk.get("model"):
                         model_name = chunk.get("model")
-                    
+
                     # [修复] 只有在收到 *非空* 块时才算 "第一条消息"
                     # 如果是空的心跳块, (delta == {})，则继续循环
                     if not (chunk.get("choices") and chunk["choices"][0].get("delta") == {}):
                         # 这是一个有效块 (文本, tool_call, 或 stop)
                         chunk_json = json.dumps(chunk)
-                        await response.write(f'data: {chunk_json}\n\n'.encode('utf-8'))
+                        await response.write(f"data: {chunk_json}\n\n".encode())
                         # 收到有效块，跳出Step 1的循环, 进入Step 2
                         break
                     else:
                         # 是空块 (delta == {})，忽略并继续等待第一条 *有效* 消息
                         logger.debug("【Chatbox 适配器】: (Stream) 收到并忽略了心跳空块")
-                        
+
             except asyncio.CancelledError:
                 raise # 如果被取消，直接抛出
             except Exception as e:
                 logger.error(f"【Chatbox 适配器】: (Stream) 队列 {message_id} 等待第一条消息时出错: {e}")
                 raise # 抛出错误到外层 catch
-            
+
             # --- 2. 循环等待后续消息 (聚合) ---
             try:
                 while True:
                     # 内层: 聚合超时 (例如 3s)
                     chunk = await asyncio.wait_for(queue.get(), timeout=self.aggregation_timeout)
-                    
+
                     # (K线图的第二条消息会在这里被捕获)
                     if chunk.get("choices") and chunk["choices"][0].get("delta") == {}:
                         continue # 跳过后续可能的心跳块
-                    
+
                     chunk_json = json.dumps(chunk)
-                    await response.write(f'data: {chunk_json}\n\n'.encode('utf-8'))
+                    await response.write(f"data: {chunk_json}\n\n".encode())
 
             except asyncio.TimeoutError:
                 # --- 正常退出 (聚合超时) ---
                 logger.debug(f"【Chatbox 适配器】: (Stream) 队列 {message_id} 聚合超时，正常关闭流。")
                 pass # 正常退出
-            
+
             except asyncio.CancelledError:
                 logger.debug(f"【Chatbox 适配器】: (Stream) 队列 {message_id} 内部循环被取消。")
                 raise
@@ -417,7 +420,7 @@ class ChatboxAdapter(Platform):
             # --- 异常退出 (LLM总超时) ---
             logger.warning(f"【Chatbox 适配器】: (Stream) 队列 {message_id} *总超时* (LLM超时)。")
             # 同样进入 finally 块发送 [DONE]
-            
+
         except Exception as e:
             logger.error(f"【Chatbox 适配器】: (Stream) 队列 {message_id} 发生未知错误: {e} (in _responder: {type(e)})")
             # 同样进入 finally 块发送 [DONE]
@@ -430,20 +433,20 @@ class ChatboxAdapter(Platform):
                 stop_chunk = self.format_as_openai_chunk(
                     {"finish_reason": "stop"},
                     message_id,
-                    model_name 
+                    model_name
                 )
                 chunk_json = json.dumps(stop_chunk)
-                await response.write(f'data: {chunk_json}\n\n'.encode('utf-8'))
-                
+                await response.write(f"data: {chunk_json}\n\n".encode())
+
                 # 2. 发送 [DONE] 终止信号
-                await response.write(b'data: [DONE]\n\n')
-                
+                await response.write(b"data: [DONE]\n\n")
+
             except Exception as e:
                 logger.warning(f"【Chatbox 适配器】: (Stream) 写入最终 [DONE] 失败 (客户端可能已提前断开): {e}")
-            
+
             self.pending_requests.pop(message_id, None)
             await response.write_eof()
-            
+
         return response
 
     async def convert_openai_to_abm(self, body: dict) -> tuple[AstrBotMessage, str]:
@@ -456,13 +459,13 @@ class ChatboxAdapter(Platform):
             if msg.get("role") == "user":
                 last_user_msg = msg
                 break
-        
+
         if not last_user_msg:
             raise ValueError("No 'user' role message found")
 
         content = last_user_msg.get("content")
         chain = []
-        
+
         if isinstance(content, str):
             chain.append(Plain(text=content))
         elif isinstance(content, list):
@@ -473,32 +476,32 @@ class ChatboxAdapter(Platform):
                     img_url = part.get("image_url", {}).get("url", "")
                     if img_url:
                         chain.append(Image(file=img_url))
-        
+
         if not chain:
             raise ValueError("User message content is empty or unsupported")
 
         abm = AstrBotMessage()
-        
+
         abm.type = MessageType.FRIEND_MESSAGE
-        
+
         user_id = self.spoof_user_id if self.spoof_user_id else body.get("user", self.default_user_id)
         nickname = self.spoof_nickname if self.spoof_nickname else self.default_nickname
-        
+
         abm.session_id = user_id
         abm.sender = MessageMember(user_id=user_id, nickname=nickname)
-        
+
         if self.spoof_platform and self.spoof_self_id:
             abm.self_id = self.spoof_self_id
         else:
             abm.self_id = self.instance_id
-        
+
         abm.message_id = f"chatcmpl-{uuid.uuid4()}"
         abm.message = chain
         abm.message_str = " ".join([p.text for p in chain if isinstance(p, Plain)])
         abm.raw_message = body
 
         model_name = body.get("model", "astrbot-default-model")
-        
+
         return abm, model_name
 
     def format_as_openai_response(self, content: str, msg_id: str, model: str, finish_reason: str = "stop", tool_calls: list = None) -> dict:
@@ -530,9 +533,9 @@ class ChatboxAdapter(Platform):
             choice_delta = {"role": "assistant", "content": delta["content"]}
         elif "tool_calls" in delta:
             choice_delta = {"role": "assistant", "tool_calls": delta["tool_calls"]}
-        
+
         finish_reason = delta.get("finish_reason")
-        
+
         return {
             "id": msg_id,
             "object": "chat.completion.chunk",
